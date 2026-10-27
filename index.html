@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b1a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="الحُسبان">
+<title>ساعة الحُسبان</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@500;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one centered column — header, dial, day/night arcs, sunrise/sunset, cities, HISBAN location state, readings, prayers */
+:root{
+  --sky:#070b1a; --sky2:#0f1630; --panel:rgba(20,28,58,.72); --line:rgba(232,190,92,.22);
+  --gold:#e8be5c; --gold-soft:#f3d68f; --night:#5b8fd9; --night-deep:#2c4a8a;
+  --ink:#eef0f8; --muted:#97a0c0;
+  --ok:#5fc48a; --warn:#f0a24a; --bad:#e5645a;
+  --display:"Reem Kufi","IBM Plex Sans Arabic",Tahoma,sans-serif;
+  --body:"IBM Plex Sans Arabic",Tahoma,sans-serif;
+  --num:"JetBrains Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--sky);color:var(--ink);font-family:var(--body);font-size:14px;min-height:100vh;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  background-image:radial-gradient(ellipse at 50% 0%,#1b2654 0%,transparent 60%),radial-gradient(ellipse at 50% 120%,#3a2a12 0%,transparent 55%)}
+[hidden]{display:none!important}
+#stars{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.wrap{position:relative;z-index:1;max-width:520px;margin:0 auto;padding-block:16px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+h1{font-family:var(--display);color:var(--gold);font-size:1.6rem;margin:0}
+.sel{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:6px 10px}
+.sel select{background:transparent;color:var(--ink);border:0;font:600 .95rem var(--body);outline:none}
+.sel select option{background:var(--sky2)}
+.sel:focus-within{border-color:var(--gold)}
+.dates{display:flex;justify-content:space-between;color:var(--muted);font-size:.8rem;margin-top:-8px}
+.dial{position:relative;width:100%;max-width:400px;margin:0 auto}
+.dial svg{width:100%;height:auto;display:block;overflow:visible}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;backdrop-filter:blur(6px)}
+.lbl{font-size:.75rem;color:var(--muted);letter-spacing:.02em}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+.bar{height:12px;border-radius:6px;overflow:hidden;display:flex;margin:10px 0 6px}
+.bar .d{background:linear-gradient(90deg,var(--gold),var(--gold-soft))}
+.bar .n{background:linear-gradient(90deg,var(--night-deep),var(--night))}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
+.cities{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.city{text-align:center;padding:10px 4px;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0}
+.city.on{border-color:var(--gold);background:rgba(232,190,92,.1)}
+.city .nm{font-weight:600;font-size:.88rem;margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.city .an{color:var(--gold);font-size:.85rem}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.stat{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0}
+.stat b{display:block;font-size:1.05rem;margin-top:2px;direction:ltr;text-align:right;white-space:nowrap;overflow-x:auto}
+h2{font-family:var(--display);color:var(--gold);font-size:1.15rem;margin:0}
+.prayers{display:flex;flex-direction:column;margin-top:10px}
+.pr{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:10px 2px;border-top:1px solid var(--line)}
+.pr:first-child{border-top:0}
+.pr.next .pn{color:var(--gold)}
+.pr .pn{font-weight:600}
+.pr .pt{font-size:.95rem}
+.pr .pa{color:var(--gold-soft);font-size:.82rem;min-width:70px;text-align:left}
+.tag{font-size:.65rem;background:var(--gold);color:var(--sky);border-radius:6px;padding:1px 6px;margin-inline-start:6px;vertical-align:middle}
+.note{font-size:.75rem;color:var(--muted);line-height:1.7;margin:0}
+/* HISBAN location state */
+.loc{display:flex;flex-direction:column;gap:12px}
+.loc-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;border-radius:999px;padding:4px 10px;border:1px solid currentColor}
+.badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.badge.ok{color:var(--ok);background:rgba(95,196,138,.1)}
+.badge.warn{color:var(--warn);background:rgba(240,162,74,.1)}
+.badge.bad{color:var(--bad);background:rgba(229,100,90,.1)}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.kv>div{min-width:0}
+.kv b{display:block;font-size:.92rem;margin-top:2px;direction:ltr;text-align:right;white-space:nowrap;overflow-x:auto}
+.kv .wide{grid-column:1/-1}
+#radius,#impact,#age,#dist{direction:rtl}
+.meter{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:3px;transition:width .6s}
+.trk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px;border:1px dashed var(--line);border-radius:12px}
+.trk>div{min-width:0}
+.trk b{display:block;font-size:.95rem;margin-top:2px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fields label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fields input,.paste{width:100%;min-width:0;background:var(--sky2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:500 .9rem var(--num);direction:ltr;text-align:left}
+.paste{font-family:var(--body);font-size:.82rem}
+.fields input:focus,.paste:focus{outline:none;border-color:var(--gold)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1;min-width:120px;border:1px solid var(--gold);background:rgba(232,190,92,.12);color:var(--gold);border-radius:10px;padding:10px 12px;font:600 .88rem var(--body);cursor:pointer}
+.btn.alt{border-color:var(--line);color:var(--ink);background:transparent}
+.btn.on{background:var(--gold);color:var(--sky)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+#locmsg{font-size:.78rem;color:var(--muted);min-height:1em;line-height:1.6}
+/* Compass */
+.cmp{display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.cmp-dial{width:100%;max-width:340px;margin:0 auto;touch-action:none}
+.cmp-dial svg{width:100%;height:auto;display:block}
+.cmp-read{text-align:center}
+.cmp-read b{font-size:2rem;color:var(--gold);display:block;line-height:1.1}
+.cmp-read span{color:var(--muted);font-size:.85rem}
+.cmp-legend{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.cmp-legend>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:.85rem;min-width:0}
+.cmp-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:6px;vertical-align:middle}
+.cmp-legend b{direction:ltr;font-family:var(--num)}
+@media (max-width:380px){.cities{grid-template-columns:repeat(2,1fr)}.kv{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){#stars{display:none}.meter i{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="wrap">
+  <header>
+    <h1>ساعة الحُسبان</h1>
+    <label class="sel" for="city">📍<select id="city"></select></label>
+  </header>
+  <div class="dates"><span id="greg"></span><span id="hijri"></span></div>
+
+  <div class="dial"><svg id="dial" viewBox="-50 -42 400 384" aria-label="قرص الشمس اليومي"></svg></div>
+
+  <section class="card">
+    <div class="row" style="color:var(--ink)"><span>تمدد قوس النهار والليل</span><span class="num" id="arcs"></span></div>
+    <div class="bar"><div class="d" id="bd"></div><div class="n" id="bn"></div></div>
+    <div class="row"><span>نهار <span class="num" id="dl"></span></span><span class="num">360°</span><span>ليل <span class="num" id="nl"></span></span></div>
+  </section>
+
+  <section class="stats" style="margin-top:-8px">
+    <div class="stat"><span class="lbl">الشروق</span><b class="num" id="rise"></b></div>
+    <div class="stat"><span class="lbl">الغروب</span><b class="num" id="set"></b></div>
+  </section>
+
+  <section>
+    <div class="lbl" style="margin-bottom:8px">زاوية الحُسبان الآن في مدن أخرى</div>
+    <div class="cities" id="cities"></div>
+  </section>
+
+  <section class="card cmp" aria-label="البوصلة">
+    <div class="loc-head"><h2>البوصلة</h2><span class="badge warn" id="cmpState">متوقفة</span></div>
+    <div class="cmp-dial"><svg id="cmp" viewBox="-24 -30 348 354" role="img" aria-label="قرص البوصلة"></svg></div>
+    <div class="cmp-read"><b class="num" id="cmpDeg">—</b><span id="cmpDir">شغّل البوصلة لقراءة اتجاه الهاتف</span></div>
+    <div class="cmp-legend">
+      <div><span><i style="background:var(--gold)"></i>الشمس الآن</span><b id="lgSun">—</b></div>
+      <div><span><i style="background:#ff9f43;border-radius:2px;width:5px;height:14px"></i>شروق اليوم</span><b id="lgRise">—</b></div>
+      <div><span><i style="background:var(--night);border-radius:2px;width:5px;height:14px"></i>غروب اليوم</span><b id="lgSet">—</b></div>
+      <div><span><i style="background:#3fbf7f;border-radius:2px"></i>القبلة</span><b id="lgQibla">—</b></div>
+    </div>
+    <div class="btns">
+      <button class="btn" id="cmpBtn" type="button">تشغيل البوصلة</button>
+      <button class="btn alt" id="cmpCal" type="button" hidden>معايرة بالشمس</button>
+    </div>
+    <p class="note" id="cmpNote">البوصلة تعمل دون شبكة ولا إنترنت، من المستشعر المغناطيسي في الهاتف. أمسك الهاتف أفقيًا بعيدًا عن المعادن. إن اضطربت القراءة، حرّك الهاتف في شكل الرقم 8.</p>
+  </section>
+
+  <section class="card loc" aria-live="polite">
+    <div class="loc-head"><h2>حالة الموقع</h2><span class="badge bad" id="state">غير محدد</span></div>
+    <div class="kv">
+      <div class="wide"><span class="lbl">الإحداثيات المعتمدة</span><b class="num" id="coords">—</b></div>
+      <div><span class="lbl">مصدر التحديد</span><b id="src" style="font-family:var(--body);direction:rtl">—</b></div>
+      <div><span class="lbl">عمر التحديد</span><b class="num" id="age">—</b></div>
+      <div><span class="lbl">دائرة الشك</span><b class="num" id="radius">—</b></div>
+      <div><span class="lbl">أثرها على الشروق والغروب</span><b class="num" id="impact">—</b></div>
+      <div class="wide"><div class="meter" title="دائرة الشك حتى حد إعادة التحديد (10 كم)"><i id="meter"></i></div></div>
+    </div>
+
+    <div class="trk" id="trk" hidden>
+      <div><span class="lbl">الخطوات</span><b class="num" id="steps">0</b></div>
+      <div><span class="lbl">المسافة</span><b class="num" id="dist">0 م</b></div>
+      <div><span class="lbl">الاتجاه</span><b class="num" id="head">—</b></div>
+    </div>
+
+    <div class="btns">
+      <button class="btn" id="gps" type="button">تحديد جديد بـ GPS</button>
+      <button class="btn alt" id="track" type="button">تتبّع الحركة</button>
+    </div>
+    <div class="btns">
+      <button class="btn alt" id="calib" type="button" hidden>معايرة البوصلة بالشمس</button>
+      <button class="btn alt" id="manual" type="button">إدخال يدوي</button>
+    </div>
+    <div id="manualbox" class="loc" hidden>
+      <div class="fields">
+        <label for="lat"><span class="lbl">خط العرض</span><input id="lat" inputmode="decimal" placeholder="36.7538"></label>
+        <label for="lon"><span class="lbl">خط الطول</span><input id="lon" inputmode="decimal" placeholder="3.0588"></label>
+      </div>
+      <input class="paste" id="paste" aria-label="لصق إحداثيات أو رابط خرائط" placeholder="أو الصق رابط خرائط Google أو الإحداثيات: 36.75, 3.05">
+      <button class="btn" id="apply" type="button">اعتمد هذا الموقع</button>
+    </div>
+    <div id="locmsg"></div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><span class="lbl">ارتفاع الشمس</span><b class="num" id="alt"></b></div>
+    <div class="stat"><span class="lbl">سَمت الشمس</span><b class="num" id="az"></b></div>
+    <div class="stat"><span class="lbl">طول النهار</span><b class="num" id="dlen"></b></div>
+    <div class="stat"><span class="lbl">إضاءة القمر</span><b class="num" id="moon"></b></div>
+  </section>
+
+  <section class="card">
+    <h2>الزوايا الهندسية للصلوات</h2>
+    <div class="prayers" id="prayers"></div>
+  </section>
+
+  <p class="note">زاوية الحُسبان = موضع اللحظة في دورة اليوم الكاملة (360°) محسوبًا من شروق الشمس، حيث كل ساعة تعادل 15°. الفجر عند انخفاض الشمس 18° والعشاء عند 17° وفق التقويم الجزائري، والعصر بالمذهب المالكي (ظل المثل). في القرص: الأعلى بداية النهار، واليمين منتصف قوس النهار، والأسفل الغروب وبداية اليوم، واليسار منتصف قوس الليل.</p>
+  <p class="note">حالة الموقع: يعمل GPS مرة واحدة عند الفتح ثم يتوقف، ويُحفظ الموقع للعمل دون شبكة. تتبّع الحركة يقدّر انتقالك بالخطوات (0.7 م للخطوة) والبوصلة، ويوسّع دائرة الشك 5% من المسافة المقطوعة. أثناء التتبّع تبقى الشاشة مضاءة، وإن أُطفئت أو صُغّر التطبيق تتوقف المستشعرات، فتُضاف إلى دائرة الشك مسافة مشي محتملة (1.4 م/ث) عن مدة الانقطاع. مستقر: أقل من 1 كم (أقل من 3 ثوانٍ تقريبًا على الأوقات). متدهور: حتى 10 كم أو مرور يوم على التحديد. بعدها يُطلب تحديد جديد. تتبّع الخطوات لا يعمل في السيارة.</p>
+  <p class="note" style="text-align:center"><a href="privacy.html" style="color:var(--gold)">سياسة الخصوصية</a> · الإصدار 1.0</p>
+</div>
+
+<script>
+const CITIES=[
+ ["الجزائر العاصمة",36.7538,3.0588,1],["وهران",35.6971,-0.6308,1],["قسنطينة",36.365,6.6147,1],["عنابة",36.9,7.7667,1],
+ ["سطيف",36.19,5.41,1],["تبسة",35.4042,8.1242,1],["بسكرة",34.85,5.73,1],["غرداية",32.49,3.67,1],["ورقلة",31.9493,5.325,1],
+ ["بشار",31.6238,-2.2162,1],["تندوف",27.6711,-8.1474,1],["تمنراست",22.785,5.5228,1],["مكة المكرمة",21.4225,39.8262,3]];
+const devTz=-new Date().getTimezoneOffset()/60;
+const rad=Math.PI/180,deg=180/Math.PI,M_PER_DEG=111320,STEP_M=0.7;
+const $=id=>document.getElementById(id);
+const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+/* ---------- HISBAN fix state ---------- */
+// fix = {lat,lon,acc(m),t(ms),src:"gps"|"manual",dx,dy (m east/north since fix),dist(m),steps}
+let fix=store.get("hisban-fix");
+if(fix&&!(isFinite(fix.lat)&&isFinite(fix.lon)))fix=null;
+let compassOffset=+store.get("hisban-compass")||0;
+function curPos(){if(!fix)return null;return[fix.lat+fix.dy/M_PER_DEG,fix.lon+fix.dx/(M_PER_DEG*Math.cos(fix.lat*rad))]}
+function radius(){return fix?(fix.acc||0)+0.05*(fix.dist||0)+(fix.unk||0):Infinity}
+function saveFix(){store.set("hisban-fix",fix)}
+
+const p0=curPos()||[36.7538,3.0588];
+CITIES.push(["موقعي الحالي",p0[0],p0[1],devTz]);
+const MINE=CITIES.length-1;
+const COMPARE=[0,11,5,10];
+let ci=store.get("husban-city");if(ci===null||!CITIES[ci])ci=fix?MINE:0;
+const sel=$("city");CITIES.forEach((c,i)=>sel.add(new Option(c[0],i)));sel.value=ci;
+sel.onchange=()=>{ci=+sel.value;store.set("husban-city",ci);tick()};
+const msg=t=>$("locmsg").textContent=t;
+
+function newFix(lat,lon,acc,src){
+  fix={lat,lon,acc,t:Date.now(),src,dx:0,dy:0,dist:0,steps:0,unk:0};saveFix();
+  ci=MINE;sel.value=MINE;store.set("husban-city",ci);tick();
+}
+function gpsFix(auto){
+  if(!window.isSecureContext){msg("تحديد الموقع يحتاج أن تُفتح الصفحة عبر https. أدخل الإحداثيات يدويًا.");if(!fix)$("manualbox").hidden=false;return}
+  if(!navigator.geolocation){msg("هذا المتصفح لا يدعم تحديد الموقع. أدخل الإحداثيات يدويًا.");$("manualbox").hidden=false;return}
+  $("gps").disabled=true;msg(auto?"تأسيس: تشغيل GPS لثوانٍ…":"جارٍ تحديد الموقع…");
+  navigator.geolocation.getCurrentPosition(p=>{
+    $("gps").disabled=false;
+    newFix(p.coords.latitude,p.coords.longitude,p.coords.accuracy||30,"gps");
+    msg("تم التحديد بدقة ±"+Math.round(p.coords.accuracy)+" م، وأُطفئ GPS.");
+  },e=>{
+    $("gps").disabled=false;
+    const why=e&&e.code===1?"رُفض إذن الموقع.":"تعذّر الوصول إلى الأقمار.";
+    msg(fix?why+" يعمل الآن من آخر موقع محفوظ.":why+" أدخل الإحداثيات يدويًا.");
+    if(!fix)$("manualbox").hidden=false;
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+}
+$("gps").onclick=()=>gpsFix(false);
+$("manual").onclick=()=>{const b=$("manualbox");b.hidden=!b.hidden;if(!b.hidden){const p=curPos()||[CITIES[ci][1],CITIES[ci][2]];$("lat").value=p[0].toFixed(6);$("lon").value=p[1].toFixed(6)}};
+$("paste").addEventListener("input",e=>{const v=e.target.value;const m=v.match(/@?(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/)||v.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);if(m){$("lat").value=m[1];$("lon").value=m[2]}});
+$("apply").onclick=()=>{
+  const lat=parseFloat($("lat").value),lon=parseFloat($("lon").value);
+  if(!isFinite(lat)||!isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){msg("الإحداثيات غير صالحة. خط العرض بين 90- و90، وخط الطول بين 180- و180.");return}
+  newFix(lat,lon,100,"manual");$("manualbox").hidden=true;msg("تم اعتماد الموقع اليدوي.");
+};
+
+/* ---------- Pedestrian dead reckoning ---------- */
+let tracking=false,heading=null,headingAbs=false,smooth=9.8,base=9.8,above=false,lastStep=0,unsaved=0;
+let oriOn=false,compassOn=false;
+const ORI_EVT=("ondeviceorientationabsolute" in window)?"deviceorientationabsolute":"deviceorientation";
+async function sensorPermission(motion){
+  try{
+    if(motion&&typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){if(await DeviceMotionEvent.requestPermission()!=="granted")return false}
+    if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function"){if(await DeviceOrientationEvent.requestPermission()!=="granted")return false}
+    return true;
+  }catch(e){return false}
+}
+function oriStart(){if(!oriOn){addEventListener(ORI_EVT,onOri);oriOn=true}}
+function oriStop(){if(oriOn&&!tracking&&!compassOn){removeEventListener(ORI_EVT,onOri);oriOn=false;heading=null}}
+function onOri(e){
+  let h=null;
+  if(typeof e.webkitCompassHeading==="number"){h=e.webkitCompassHeading;headingAbs=true}
+  else if(e.alpha!=null){h=(360-e.alpha)%360;headingAbs=!!e.absolute||e.type==="deviceorientationabsolute"}
+  if(h!=null){const so=(screen.orientation&&screen.orientation.angle)||0;heading=((h+so+compassOffset)%360+360)%360}
+}
+function onMotion(e){
+  const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;
+  const m=Math.hypot(a.x,a.y,a.z);smooth=smooth*.75+m*.25;base=base*.98+m*.02;
+  const now=performance.now();
+  if(!above&&smooth>base+1.3&&now-lastStep>300){above=true;lastStep=now;step()}
+  else if(above&&smooth<base+.4)above=false;
+}
+function step(){
+  if(!fix)return;
+  fix.steps++;fix.dist+=STEP_M;
+  if(heading!=null){fix.dx+=STEP_M*Math.sin(heading*rad);fix.dy+=STEP_M*Math.cos(heading*rad)}
+  else fix.dist+=STEP_M*2; // no direction: count the step as extra uncertainty
+  if(++unsaved>=10){unsaved=0;saveFix()}
+}
+/* Wake lock keeps the screen (and sensors) on while tracking; a gap while hidden widens the uncertainty */
+const WALK_MS=1.4;let wake=null,hiddenAt=null;
+async function lockScreen(){try{if("wakeLock" in navigator&&!wake){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}}catch(e){wake=null}}
+function unlockScreen(){try{wake&&wake.release()}catch(e){}wake=null}
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){if(tracking)hiddenAt=Date.now();if(fix)saveFix();return}
+  if(tracking){
+    lockScreen();
+    if(hiddenAt&&fix){const gap=(Date.now()-hiddenAt)/1000;if(gap>5){fix.unk=(fix.unk||0)+gap*WALK_MS;saveFix();msg("توقف التتبّع "+fmtAge(gap*1000).replace("الآن","ثوانٍ")+" والشاشة مطفأة، فوُسّعت دائرة الشك بـ "+fmtDist(gap*WALK_MS)+".")}}
+  }
+  hiddenAt=null;tick();
+});
+async function startTracking(){
+  if(!fix){msg("حدّد موقعك أولًا، ثم شغّل تتبّع الحركة.");return}
+  if(!(await sensorPermission(true))){msg("لم يُسمح بالوصول إلى مستشعرات الحركة.");return}
+  if(typeof DeviceMotionEvent==="undefined"){msg("هذا الجهاز لا يوفّر مستشعرات الحركة للمتصفح.");return}
+  addEventListener("devicemotion",onMotion);
+  tracking=true;oriStart();lockScreen();$("track").classList.add("on");$("track").textContent="إيقاف التتبّع";$("trk").hidden=false;$("calib").hidden=false;
+  msg("التتبّع يعمل. احمل الهاتف أمامك وأعلاه باتجاه سيرك.");
+}
+function stopTracking(){
+  removeEventListener("devicemotion",onMotion);
+  tracking=false;oriStop();unlockScreen();saveFix();$("track").classList.remove("on");$("track").textContent="تتبّع الحركة";$("calib").hidden=true;msg("توقف التتبّع.");
+}
+$("track").onclick=()=>tracking?stopTracking():startTracking();
+// Solar constraint: point the top of the phone at the sun, the known solar azimuth corrects the compass
+function calibrateWithSun(out){
+  if(heading==null){out("لم تصل قراءة البوصلة بعد. حرّك الهاتف قليلًا ثم أعد المحاولة.");return}
+  const s=sunNow();if(s.alt<2){out("الشمس تحت الأفق أو قريبة منه. المعايرة تحتاج شمسًا ظاهرة.");return}
+  const raw=((heading-compassOffset)%360+360)%360;
+  compassOffset=((s.az-raw+540)%360)-180;store.set("hisban-compass",compassOffset);
+  out("صُحّحت البوصلة بالشمس: "+(compassOffset>0?"+":"")+compassOffset.toFixed(1)+"°. صارت تشير إلى الشمال الحقيقي.");
+}
+$("calib").onclick=()=>calibrateWithSun(msg);
+
+/* ---------- Compass ---------- */
+const KAABA=[21.4225,39.8262];
+const DIRS=["شمال","شمال شرق","شرق","جنوب شرق","جنوب","جنوب غرب","غرب","شمال غرب"];
+const dirName=a=>DIRS[Math.round(((a%360)+360)%360/45)%8];
+function bearing(la1,lo1,la2,lo2){const p1=la1*rad,p2=la2*rad,dl=(lo2-lo1)*rad;
+  return(Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))*deg+360)%360}
+function riseAz(dec,lat){const h0=-.833*rad,c=(Math.sin(dec)-Math.sin(lat*rad)*Math.sin(h0))/(Math.cos(lat*rad)*Math.cos(h0));return Math.abs(c)>1?null:Math.acos(c)*deg}
+const CP=(r,a)=>[150+r*Math.sin(a*rad),150-r*Math.cos(a*rad)];
+(function buildCompass(){
+  let t="";
+  for(let a=0;a<360;a+=2){const big=a%30===0,mid=a%10===0;const[x1,y1]=CP(146,a),[x2,y2]=CP(big?128:mid?134:139,a);
+    t+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--ink)" stroke-opacity="${big?.9:mid?.55:.25}" stroke-width="${big?1.6:1}"/>`}
+  for(let a=0;a<360;a+=30){if(a%90===0)continue;const[x,y]=CP(116,a);t+=`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="11" fill="var(--muted)" font-family="var(--num)" transform="rotate(${a} ${x.toFixed(1)} ${y.toFixed(1)})">${a}</text>`}
+  [["ش",0,"#e5645a"],["ق",90,"var(--ink)"],["ج",180,"var(--ink)"],["غ",270,"var(--ink)"]].forEach(([l,a,c])=>{const[x,y]=CP(112,a);
+    t+=`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="700" fill="${c}" font-family="var(--display)" transform="rotate(${a} ${x.toFixed(1)} ${y.toFixed(1)})">${l}</text>`});
+  $("cmp").innerHTML=`<circle cx="150" cy="150" r="148" fill="var(--sky2)" stroke="var(--line)" stroke-width="2"/>
+   <g id="cmpCard">${t}<g id="cmpMarks"></g></g>
+   <circle cx="150" cy="150" r="58" fill="var(--panel)" stroke="var(--line)"/>
+   <line x1="150" y1="104" x2="150" y2="196" stroke="var(--line)"/><line x1="104" y1="150" x2="196" y2="150" stroke="var(--line)"/>
+   <path d="M150 -26 L141 -8 L159 -8 Z" fill="var(--gold)"/><line x1="150" y1="-6" x2="150" y2="22" stroke="var(--gold)" stroke-width="3"/>`;
+})();
+function renderCompass(S,lat,lon,sunAz,sunAlt){
+  const r=riseAz(S.dec,lat),q=bearing(lat,lon,KAABA[0],KAABA[1]);
+  const bar=(a,fill)=>{if(a==null)return"";const[x1,y1]=CP(122,a),[x2,y2]=CP(148,a);return`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${fill}" stroke-width="6" stroke-linecap="round"/>`};
+  const[qx,qy]=CP(96,q),[sx,sy]=CP(76,sunAz);
+  $("cmpMarks").innerHTML=bar(r,"#ff9f43")+bar(r==null?null:360-r,"var(--night)")+
+    `<rect x="${qx-8}" y="${qy-8}" width="16" height="16" rx="2" fill="#3fbf7f" stroke="var(--sky)" stroke-width="2" transform="rotate(${q} ${qx} ${qy})"/>`+
+    `<circle cx="${sx}" cy="${sy}" r="9" fill="${sunAlt>-0.833?"var(--gold)":"none"}" stroke="${sunAlt>-0.833?"var(--sky)":"var(--muted)"}" stroke-width="2"/>`;
+  const f=a=>a==null?"—":a.toFixed(1)+"°";
+  $("lgSun").textContent=f(sunAz)+(sunAlt>-0.833?"":" (تحت الأفق)");$("lgRise").textContent=f(r);$("lgSet").textContent=f(r==null?null:360-r);$("lgQibla").textContent=f(q);
+}
+let shown=0;
+function compassFrame(){
+  if(!compassOn)return;
+  if(heading!=null){const d=((heading-shown+540)%360)-180;shown=(shown+d*.2+360)%360;
+    $("cmpCard").setAttribute("transform",`rotate(${(-shown).toFixed(2)} 150 150)`);
+    $("cmpDeg").textContent=Math.round(heading)+"°";
+    $("cmpDir").textContent=dirName(heading)+(compassOffset?" · شمال حقيقي (مُعايَر بالشمس)":headingAbs?" · شمال مغناطيسي":" · اتجاه نسبي: عايِر بالشمس");
+    const st=$("cmpState");if(compassOffset||headingAbs){st.className="badge ok";st.textContent="تعمل"}else{st.className="badge warn";st.textContent="تحتاج معايرة"}}
+  requestAnimationFrame(compassFrame);
+}
+$("cmpBtn").onclick=async()=>{
+  if(compassOn){compassOn=false;oriStop();$("cmpBtn").textContent="تشغيل البوصلة";$("cmpCal").hidden=true;$("cmpCard").setAttribute("transform","");$("cmpDeg").textContent="—";$("cmpDir").textContent="البوصلة متوقفة";const st=$("cmpState");st.className="badge warn";st.textContent="متوقفة";return}
+  if(!window.isSecureContext){$("cmpDir").textContent="البوصلة تحتاج أن تُفتح الصفحة عبر https.";return}
+  if(typeof DeviceOrientationEvent==="undefined"){$("cmpDir").textContent="هذا الجهاز لا يوفّر بوصلة للمتصفح.";return}
+  const granted=await sensorPermission(false); // Safari asks; other browsers may lack or refuse the call yet still deliver events
+  compassOn=true;oriStart();$("cmpBtn").textContent="إيقاف البوصلة";$("cmpCal").hidden=false;$("cmpDir").textContent="انتظر قراءة المستشعر… حرّك الهاتف قليلًا.";
+  setTimeout(()=>{if(compassOn&&heading==null)$("cmpDir").textContent=granted?"لم تصل قراءة. قد لا يحتوي الهاتف على مستشعر مغناطيسي، أو أن المتصفح يمنعه.":"لم يُسمح بالوصول إلى البوصلة. اسمح بمستشعرات الحركة في إعدادات المتصفح ثم أعد المحاولة."},4000);
+  requestAnimationFrame(compassFrame);
+};
+$("cmpCal").onclick=()=>calibrateWithSun(t=>{$("cmpNote").textContent=t});
+
+/* ---------- Solar math (analytic, offline) ---------- */
+function localNow(tz){const d=new Date(Date.now()+tz*3600e3);return{d,h:d.getUTCHours()+d.getUTCMinutes()/60+d.getUTCSeconds()/3600}}
+function sun(d,lat,lon,tz){
+  const day=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),12-tz);
+  const n=day/864e5+2440587.5-2451545;
+  const L=(280.46+.9856474*n)%360,g=(357.528+.9856003*n)*rad;
+  const lam=(L+1.915*Math.sin(g)+.02*Math.sin(2*g))*rad,eps=(23.439-4e-7*n)*rad;
+  const dec=Math.asin(Math.sin(eps)*Math.sin(lam));
+  const ra=Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam))*deg;
+  let e=L-((ra+360)%360);e=((e+540)%360)-180; // equation of time in degrees, wrapped
+  const noon=12-lon/15-e*4/60+tz;
+  const ha=h=>{const c=(Math.sin(h*rad)-Math.sin(lat*rad)*Math.sin(dec))/(Math.cos(lat*rad)*Math.cos(dec));return Math.acos(Math.max(-1,Math.min(1,c)))*deg/15};
+  const asrAlt=Math.atan(1/(1+Math.tan(Math.abs(lat*rad-dec))))*deg;
+  return{dec,noon,rise:noon-ha(-.833),set:noon+ha(-.833),fajr:noon-ha(-18),asr:noon+ha(asrAlt),isha:noon+ha(-17)};
+}
+function altAz(h,S,lat){
+  const H=(h-S.noon)*15*rad,la=lat*rad;
+  const alt=Math.asin(Math.sin(la)*Math.sin(S.dec)+Math.cos(la)*Math.cos(S.dec)*Math.cos(H))*deg;
+  const az=(Math.atan2(Math.sin(H),Math.cos(H)*Math.sin(la)-Math.tan(S.dec)*Math.cos(la))*deg+180)%360;
+  return{alt,az};
+}
+function sunNow(){const [,lat,lon,tz]=CITIES[ci];const {d,h}=localNow(tz);return altAz(h,sun(d,lat,lon,tz),lat)}
+// seconds of sunrise/sunset shift caused by a position error of R metres
+function impactSec(R,d,lat,lon,tz){
+  const S0=sun(d,lat,lon,tz),dl=R/M_PER_DEG,dn=R/(M_PER_DEG*Math.cos(lat*rad));
+  const S1=sun(d,Math.min(89,lat+dl),lon,tz),S2=sun(d,lat,lon+dn,tz);
+  const ns=Math.max(Math.abs(S1.rise-S0.rise),Math.abs(S1.set-S0.set)),ew=Math.max(Math.abs(S2.rise-S0.rise),Math.abs(S2.set-S0.set));
+  return Math.hypot(ns,ew)*3600;
+}
+const fmt=h=>{h=((h%24)+24)%24;let m=Math.round(h*60)%1440;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+const fmtS=h=>{h=((h%24)+24)%24;const s=h*3600,hh=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;return String(hh).padStart(2,"0")+":"+String(mm).padStart(2,"0")+":"+ss.toFixed(4).padStart(7,"0")};
+const husban=(t,rise)=>((t-rise)*15%360+360)%360;
+const P=(r,a)=>[150+r*Math.sin(a*rad),150-r*Math.cos(a*rad)];
+// top = sunrise, right = midday, bottom = sunset (start of the Hijri day), left = midnight
+function dialA(t,S){const dl=S.set-S.rise;const x=((t-S.rise)%24+24)%24;return x<dl?180*x/dl:180+180*(x-dl)/(24-dl)}
+function arc(r,a1,a2){const s=P(r,a1),e=P(r,a2),span=((a2-a1)%360+360)%360;return`M${s[0].toFixed(2)} ${s[1].toFixed(2)}A${r} ${r} 0 ${span>180?1:0} 1 ${e[0].toFixed(2)} ${e[1].toFixed(2)}`}
+const fmtDist=m=>m<1000?Math.round(m)+" م":(m/1000).toFixed(m<10000?2:1)+" كم";
+function fmtAge(ms){const s=ms/1000;if(s<60)return"الآن";if(s<3600)return Math.floor(s/60)+" د";if(s<86400)return Math.floor(s/3600)+" س "+Math.floor(s%3600/60)+" د";return Math.floor(s/86400)+" يوم"}
+
+function renderState(d){
+  const st=$("state");
+  if(!fix){st.className="badge bad";st.textContent="غير محدد";["coords","src","age","radius","impact"].forEach(k=>$(k).textContent="—");$("meter").style.width="0";return}
+  const [lat,lon]=curPos(),R=radius(),age=Date.now()-fix.t;
+  let cls,txt;
+  if(R>10000||age>7*864e5){cls="bad";txt="إعادة تحديد مطلوبة"}
+  else if(R>1000||age>864e5){cls="warn";txt="متدهور"}
+  else{cls="ok";txt="مستقر"}
+  st.className="badge "+cls;st.textContent=txt;
+  $("coords").textContent=lat.toFixed(6)+"°, "+lon.toFixed(6)+"°";
+  $("src").textContent=(fix.src==="gps"?"GPS":"يدوي")+(fix.steps?" + خطوات":"");
+  $("age").textContent=fmtAge(age);
+  $("radius").textContent="± "+fmtDist(R);
+  $("impact").textContent="± "+(v=>v.toFixed(v<1?2:1))(impactSec(R,d,lat,lon,devTz))+" ث";
+  const mt=$("meter");mt.style.width=Math.min(100,R/100)+"%";mt.style.background="var(--"+cls+")";
+  if(tracking){$("steps").textContent=fix.steps;$("dist").textContent=fmtDist(fix.dist);
+    $("head").textContent=heading==null?"—":Math.round(heading)+"°"+(headingAbs||compassOffset?"":" ؟")}
+}
+
+function tick(){
+  if(fix){const p=curPos();CITIES[MINE][1]=p[0];CITIES[MINE][2]=p[1]}
+  const [,lat,lon,tz]=CITIES[ci];const {d,h}=localNow(tz);const S=sun(d,lat,lon,tz);
+  const dayLen=S.set-S.rise,dayDeg=dayLen*15,nightDeg=360-dayDeg;
+  const hb=husban(h,S.rise);const isDay=h>=S.rise&&h<S.set;
+  let pct,pl;
+  if(isDay){pct=(h-S.rise)/dayLen;pl="مؤشر نهارك"}else{const since=h>=S.set?h-S.set:h+24-S.set;pct=since/(24-dayLen);pl="مؤشر ليلك"}
+  const ph=((Date.now()-Date.UTC(2000,0,6,18,14))/864e5/29.530588%1+1)%1;const illum=(1-Math.cos(2*Math.PI*ph))/2;
+  const {alt,az}=altAz(h,S,lat);
+
+  const aN=dialA(h,S),midnight=S.set+(24-dayLen)/2;
+  const prayers=[["الفجر",S.fajr],["الشروق",S.rise],["الظهر",S.noon+2/60],["العصر",S.asr],["المغرب",S.set+3/60],["العشاء",S.isha]];
+  let ticks="";for(let i=0;i<72;i++){const a=i*5,big=i%6===0,p1=P(132,a),p2=P(big?124:128,a);ticks+=`<line x1="${p1[0]}" y1="${p1[1]}" x2="${p2[0]}" y2="${p2[1]}" stroke="var(--gold)" stroke-opacity="${big?.7:.3}" stroke-width="${big?1.4:.8}"/>`}
+  let pm="";prayers.forEach(([n,t])=>{const[x,y]=P(108,dialA(t,S));pm+=`<circle cx="${x}" cy="${y}" r="2.6" fill="var(--gold-soft)"/>`});
+  const [nx,ny]=P(108,aN),[hx,hy]=P(70,aN);
+  const lab=(sub,tm,a,c)=>{const[x,y]=P(166,a);return`<g transform="translate(${x},${y})"><rect x="-38" y="-16" width="76" height="32" rx="12" fill="var(--sky2)" stroke="${c}" stroke-opacity=".7"/><text text-anchor="middle" y="-2" fill="${c}" font-size="10" font-weight="700" font-family="var(--display)">${sub}</text><text text-anchor="middle" y="10" fill="var(--ink)" font-size="8.5" font-family="var(--num)">${tm}</text></g>`};
+  let quarters="";[0,90,180,270].forEach(a=>{const p1=P(118,a),p2=P(98,a);quarters+=`<line x1="${p1[0]}" y1="${p1[1]}" x2="${p2[0]}" y2="${p2[1]}" stroke="var(--ink)" stroke-opacity=".55" stroke-width="1.5"/>`});
+  $("dial").innerHTML=`
+   <defs><radialGradient id="core"><stop offset="0" stop-color="#16204a"/><stop offset="1" stop-color="#0a0f24"/></radialGradient>
+   <filter id="glow"><feGaussianBlur stdDeviation="3"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+   <circle cx="150" cy="150" r="140" fill="none" stroke="var(--gold)" stroke-opacity=".5" stroke-width="1.5"/>
+   ${ticks}
+   <path d="${arc(108,0,90)}${arc(108,90,180)}" fill="none" stroke="var(--gold)" stroke-width="9" filter="url(#glow)"/>
+   <path d="${arc(108,180,270)}${arc(108,270,359.99)}" fill="none" stroke="var(--night)" stroke-width="9" stroke-opacity=".85"/>
+   ${quarters}
+   ${pm}
+   <circle cx="150" cy="150" r="92" fill="url(#core)" stroke="var(--line)"/>
+   <line x1="150" y1="150" x2="${hx}" y2="${hy}" stroke="var(--gold-soft)" stroke-width="1.2" stroke-opacity=".6"/>
+   <circle cx="${nx}" cy="${ny}" r="8" fill="${isDay?"var(--gold)":"var(--ink)"}" stroke="var(--sky)" stroke-width="2" filter="url(#glow)"/>
+   <text x="150" y="98" text-anchor="middle" fill="var(--muted)" font-size="9" font-family="var(--body)">زاوية حُسبان</text>
+   <text x="150" y="116" text-anchor="middle" fill="var(--ink)" font-size="15" font-family="var(--num)">${hb.toFixed(5)}°</text>
+   <text x="150" y="134" text-anchor="middle" fill="var(--muted)" font-size="9" font-family="var(--body)">${pl}</text>
+   <text x="150" y="166" text-anchor="middle" fill="${isDay?"var(--gold)":"var(--night)"}" font-size="32" font-weight="700" font-family="var(--num)">${Math.round(pct*100)}%</text>
+   <text x="150" y="192" text-anchor="middle" fill="var(--gold)" font-size="16" font-family="var(--num)">${fmt(h)}:${String(d.getUTCSeconds()).padStart(2,"0")}</text>
+   <text x="150" y="210" text-anchor="middle" fill="var(--muted)" font-size="9" font-family="var(--num)">☾ ${Math.round(illum*100)}%</text>
+   ${lab("بداية النهار",fmt(S.rise),0,"var(--gold)")}${lab("منتصف النهار",fmt(S.noon),90,"var(--gold)")}${lab("بداية اليوم",fmt(S.set),180,"var(--night)")}${lab("منتصف الليل",fmt(midnight),270,"var(--night)")}`;
+
+  $("arcs").textContent=`${dayDeg.toFixed(4)}° / ${nightDeg.toFixed(4)}°`;
+  $("bd").style.width=dayDeg/3.6+"%";$("bn").style.width=nightDeg/3.6+"%";
+  $("dl").textContent=dayDeg.toFixed(2)+"°";$("nl").textContent=nightDeg.toFixed(2)+"°";
+  $("alt").textContent=alt.toFixed(2)+"°";$("az").textContent=az.toFixed(2)+"°";
+  $("rise").textContent=fmt(S.rise);$("set").textContent=fmt(S.set);$("dlen").textContent=fmtS(dayLen);$("moon").textContent=Math.round(illum*100)+"%";
+
+  $("cities").innerHTML=COMPARE.map(i=>{const c=CITIES[i],L=localNow(c[3]),s=sun(L.d,c[1],c[2],c[3]);
+    return`<div class="city${i===ci?" on":""}"><div class="nm">${c[0]}</div><div class="an num">${husban(L.h,s.rise).toFixed(1)}°</div></div>`}).join("");
+
+  let nextI=prayers.findIndex(p=>p[1]>h);if(nextI===-1)nextI=0;
+  $("prayers").innerHTML=prayers.map(([n,t],i)=>`<div class="pr${i===nextI?" next":""}"><span class="pn">${n}${i===nextI?'<span class="tag">التالية</span>':""}</span><span class="pt num">${fmt(t)}</span><span class="pa num">${husban(t,S.rise).toFixed(2)}°</span></div>`).join("");
+
+  const ld=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),12));
+  try{$("greg").textContent=new Intl.DateTimeFormat("ar-DZ",{day:"numeric",month:"long",year:"numeric",timeZone:"UTC"}).format(ld)}catch(e){}
+  try{$("hijri").textContent=new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura-nu-latn",{day:"numeric",month:"long",year:"numeric",timeZone:"UTC"}).format(ld)}catch(e){}
+  renderCompass(S,lat,lon,az,alt);
+  renderState(localNow(devTz).d);
+}
+tick();setInterval(tick,1000);
+addEventListener("pagehide",()=>{if(fix)saveFix()});
+
+// Bootstrap: GPS once on open, then off
+gpsFix(true);
+
+// Offline support when hosted next to sw.js
+if("serviceWorker" in navigator&&window.isSecureContext){navigator.serviceWorker.register("sw.js").catch(()=>{})}
+
+// starfield
+(()=>{const c=$("stars"),x=c.getContext("2d");let st=[];
+ function size(){c.width=innerWidth*devicePixelRatio;c.height=innerHeight*devicePixelRatio;st=Array.from({length:160},()=>({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.3*devicePixelRatio,p:Math.random()*6}))}
+ size();addEventListener("resize",size);
+ (function f(t){x.clearRect(0,0,c.width,c.height);st.forEach(s=>{x.globalAlpha=.35+.45*Math.sin(t/900+s.p)**2;x.fillStyle="#fff";x.beginPath();x.arc(s.x,s.y,s.r,0,7);x.fill()});requestAnimationFrame(f)})(0);
+})();
+</script>
+</body>
+</html>
